@@ -1,13 +1,27 @@
 import 'dotenv/config'
 import express from 'express'
-import {ApolloServer, gql } from 'apollo-server-express'
+import {ApolloServer, AuthorizationError, AuthenticationError} from 'apollo-server-express'
 import cors from 'cors'
 import schema from './schema'
 import resolvers from './resolvers'
 import models, { sequelize} from './models'
+import jwt from 'jsonwebtoken'
 
 const app = express()
 app.use(cors())
+
+// validate the token from the request header
+// use this to define or undefined me in context obj
+const getMe = async req => {
+    const token = req.headers['x-token'];
+    if (token) {
+        try {
+            return await jwt.verify(token, process.env.SECRET)
+        } catch (e) {
+            throw new AuthenticationError('Your session expired. Sign in again.')
+        }
+    }
+}
 
 //me: models.users[1], should no longer work
 // and I don't think I need it
@@ -23,11 +37,13 @@ const server = new ApolloServer({
             .replace('Validation error: ', '')
         return { ...error, message}
     },
-    context: async () => ({
+    context: async () => {
+        return {
         models,
         me: await models.User.findByLogin('kieu1'),
         secret: process.env.SECRET,
-    })
+        }
+    }
 })
 // bring in express middleware into apolloServer
 // also specify GQL end point
@@ -48,6 +64,7 @@ const createUsersWithMessages = async () => {
     await models.User.create(
       { username: 'kieu1',
         email: 'kieu1@example.com',
+        password: 'abcd1234',
         messages: [
           {text: 'Hello one from kieu',},
         ],
@@ -58,6 +75,7 @@ const createUsersWithMessages = async () => {
     await models.User.create(
       { username: 'morgan1',
         email: 'morgan1@example.com',
+        password: 'abcd1234',
         messages: [
           { text: 'Hello one from morgan1',},
           {text: 'Hello two from morgan1',},
